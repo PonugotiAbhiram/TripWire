@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>TripWire Dashboard</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="error-bar" class="hidden">Cannot reach sensor</div>
+  
+  <header>
+    <h1>TripWire Sensor Dashboard</h1>
+  </header>
+
+  <main>
+    <section class="stats-grid">
+      <div class="card">
+        <h3>Total Events</h3>
+        <div class="stat-value" id="stats-total">-</div>
+      </div>
+      <div class="card">
+        <h3>Unique IPs</h3>
+        <div class="stat-value" id="stats-ips">-</div>
+      </div>
+      <div class="card">
+        <h3>High Severity</h3>
+        <div class="stat-value text-red" id="stats-high">-</div>
+      </div>
+      <div class="card">
+        <h3>Medium Severity</h3>
+        <div class="stat-value text-orange" id="stats-medium">-</div>
+      </div>
+      <div class="card">
+        <h3>Low Severity</h3>
+        <div class="stat-value text-yellow" id="stats-low">-</div>
+      </div>
+    </section>
+
+    <div class="main-grid">
+      <section class="attackers-section">
+        <h2>Recent Attackers</h2>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>IP</th>
+                <th>Level</th>
+                <th>Score</th>
+                <th>Events</th>
+                <th>Last Seen</th>
+                <th>Summary</th>
+              </tr>
+            </thead>
+            <tbody id="attackers-tbody">
+              <tr class="empty-state"><td colspan="6">No attackers yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="detail-section">
+        <h2>Attacker Details</h2>
+        <div id="detail-panel" class="hidden card">
+          <div class="detail-header">
+            <h3 id="detail-ip">-</h3>
+            <span id="detail-badge" class="badge"></span>
+          </div>
+          
+          <div class="detail-group">
+            <strong>Summary:</strong>
+            <span id="detail-summary"></span>
+          </div>
+
+          <div class="detail-group">
+            <strong>Tool Hints:</strong>
+            <span id="detail-tools"></span>
+          </div>
+
+          <div class="detail-lists">
+            <div>
+              <strong>Top Usernames</strong>
+              <ul id="detail-usernames"></ul>
+            </div>
+            <div>
+              <strong>Top Passwords</strong>
+              <ul id="detail-passwords"></ul>
+            </div>
+            <div>
+              <strong>Paths Probed</strong>
+              <ul id="detail-paths"></ul>
+            </div>
+          </div>
+
+          <div class="timeline-container">
+            <strong>Timeline (Oldest First)</strong>
+            <table class="data-table small-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Protocol</th>
+                  <th>Port</th>
+                  <th>Method</th>
+                  <th>Detail</th>
+                </tr>
+              </thead>
+              <tbody id="detail-timeline"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="detail-empty" class="card empty-panel">
+          Select an attacker to view details.
+        </div>
+      </section>
+    </div>
+
+    <section class="feed-section">
+      <h2>Live Event Feed (Latest 20)</h2>
+      <div class="table-container">
+        <table class="data-table small-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>IP</th>
+              <th>Protocol</th>
+              <th>Port</th>
+              <th>Method</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="feed-tbody">
+            <tr class="empty-state"><td colspan="6">No events yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

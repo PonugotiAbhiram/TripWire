@@ -11,6 +11,7 @@
 
 const express = require('express');
 const net = require('net');
+const path = require('path');
 const db = require('./db');
 const analyzer = require('./analyzer');
 const severity = require('./severity');
@@ -19,6 +20,19 @@ const app = express();
 
 // Disable X-Powered-By header
 app.disable('x-powered-by');
+
+// Apply security headers to non-api routes (dashboard)
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+  }
+  next();
+});
+
+// Serve static dashboard files
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Apply security and JSON headers ONLY on /api routes
 app.use('/api', (req, res, next) => {
