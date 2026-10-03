@@ -173,12 +173,32 @@ $client.Close()
 
 ---
 
-## 📊 Fetching Logged Events from Admin API (Port 3000)
+## 📊 Admin API Endpoints (Port 3000 - Local Only)
 
-View captured honeypot events (including Telnet/FTP login attempts, SSH version banners, and connection sweeps):
+Administrative REST API endpoints are bound strictly to `127.0.0.1:3000`:
 
+### 1. `GET /api/events`
+Returns the 100 most recent logged events, newest first.
 ```bash
 curl http://127.0.0.1:3000/api/events
+```
+
+### 2. `GET /api/attackers`
+Returns the 100 most recent attacker IP addresses with threat level assessments, sorted by severity score descending.
+```bash
+curl http://127.0.0.1:3000/api/attackers
+```
+
+### 3. `GET /api/attackers/:ip`
+Returns detailed profile metrics, threat assessment, and chronological activity timeline for a specific IP.
+```bash
+curl http://127.0.0.1:3000/api/attackers/127.0.0.1
+```
+
+### 4. `GET /api/stats`
+Returns system-wide metrics including total event count, unique IP count, top passwords/usernames, events per protocol, events per hour (last 24h), and threat level distribution.
+```bash
+curl http://127.0.0.1:3000/api/stats
 ```
 
 ---
@@ -194,4 +214,5 @@ curl http://127.0.0.1:3000/api/events
    - Input lines capped at **256 bytes**, max **20 lines** per connection.
 4. **CONNECT & DISCONNECT Logging**: Logs `CONNECT` on socket open and `DISCONNECT` on socket close across all TCP doors.
 5. **Real IP Extraction**: Uses `socket.remoteAddress` and strips `::ffff:`.
-6. **Local-Only Admin API**: Binds port `3000` strictly to `127.0.0.1`.
+6. **Local-Only Admin API**: Binds port `3000` strictly to `127.0.0.1` with `X-Content-Type-Options: nosniff` and `Cache-Control: no-store` headers on `/api` routes.
+

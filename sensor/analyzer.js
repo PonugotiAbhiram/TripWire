@@ -200,7 +200,124 @@ function getProfile(ip) {
   };
 }
 
+/**
+ * Retrieves the timeline of recent activity events for a specific IP.
+ * Selects newest rows (ORDER BY id DESC LIMIT ?), then reverses them (oldest first).
+ * 
+ * @param {string} ip - Source IP address
+ * @param {number} [limit=200] - Maximum events to fetch
+ * @returns {Array<{time: string, protocol: string, port: number, method: string, detail: string}>}
+ */
+function getTimeline(ip, limit = 200) {
+  if (!ip || typeof ip !== 'string' || net.isIP(ip) === 0) {
+    return [];
+  }
+  const parsedLimit = Math.max(1, parseInt(limit, 10) || 200);
+  const stmt = db.prepare(`
+    SELECT timestamp AS time, protocol, port, method, path, username, password
+    FROM events
+    WHERE source_ip = ?
+    ORDER BY id DESC
+    LIMIT ?
+  `);
+  const rows = stmt.all(ip, parsedLimit);
+  rows.reverse();
+
+  return rows.map(r => {
+    let detail = '';
+    const hasUsername = r.username !== null && r.username !== undefined && r.username !== '';
+    const hasPassword = r.password !== null && r.password !== undefined && r.password !== '';
+    if (hasUsername || hasPassword) {
+      detail = `${r.username || ''}:${r.password || ''}`;
+    } else {
+      detail = r.path || '';
+    }
+    if (detail.length > 120) {
+      detail = detail.substring(0, 120);
+    }
+    return {
+      time: r.time,
+      protocol: r.protocol,
+      port: r.port,
+      method: r.method,
+      detail
+    };
+  });
+}
+
+function getTotalEvents() {
+  const res = db.prepare('SELECT COUNT(*) AS count FROM events').get();
+  return res ? res.count : 0;
+}
+
+function getUniqueIps() {
+  const res = db.prepare('SELECT COUNT(DISTINCT source_ip) AS count FROM events').get();
+  return res ? res.count : 0;
+}
+
+function getTopPasswords(limit = 10) {
+  const parsedLimit = Math.max(1, parseInt(limit, 10) || 10);
+  const stmt = db.prepare(`
+    SELECT password, COUNT(*) AS count
+    FROM events
+    WHERE password IS NOT NULL AND password != ''
+    GROUP BY password
+    ORDER BY count DESC, password ASC
+    LIMIT ?
+  `);
+  return stmt.all(parsedLimit);
+}
+
+function getTopUsernames(limit = 10) {
+  const parsedLimit = Math.max(1, parseInt(limit, 10) || 10);
+  const stmt = db.prepare(`
+    SELECT username, COUNT(*) AS count
+    FROM events
+    WHERE username IS NOT NULL AND username != ''
+    GROUP BY username
+    ORDER BY count DESC, username ASC
+    LIMIT ?
+  `);
+  return stmt.all(parsedLimit);
+}
+
+function getEventsPerProtocol() {
+  const rows = db.prepare(`
+    SELECT protocol, COUNT(*) AS count
+    FROM events
+    GROUP BY protocol
+  `).all();
+  const result = { http: 0, telnet: 0, ftp: 0, ssh: 0 };
+  for (const r of rows) {
+    if (r.protocol in result) {
+      result[r.protocol] = r.count;
+    } else {
+      result[r.protocol] = r.count;
+    }
+  }
+  return result;
+}
+
+function getEventsPerHour(sinceIso) {
+  const stmt = db.prepare(`
+    SELECT SUBSTR(timestamp, 1, 13) AS hour, COUNT(*) AS count
+    FROM events
+    WHERE timestamp >= ?
+    GROUP BY hour
+    ORDER BY hour ASC
+  `);
+  return stmt.all(sinceIso);
+}
+
 module.exports = {
   listIps,
-  getProfile
+  getProfile,
+  getTimeline,
+  getTotalEvents,
+  getUniqueIps,
+  getTopPasswords,
+  getTopUsernames,
+  getEventsPerProtocol,
+  getEventsPerHour
 };
+
