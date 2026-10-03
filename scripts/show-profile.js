@@ -11,6 +11,7 @@
 const net = require('net');
 const analyzer = require('../sensor/analyzer');
 const labelsModule = require('../sensor/labels');
+const severityModule = require('../sensor/severity');
 
 function main() {
   const targetIp = process.argv[2];
@@ -35,14 +36,24 @@ function main() {
     process.exit(1);
   }
 
-  // Retrieve labels, reasons, and tool hints
-  const labelsData = labelsModule.getLabels(targetIp) || { labels: [], reasons: [], tool_hints: [] };
+  // Retrieve security assessment (labels, reasons, tool_hints, score, level, summary)
+  const assessment = severityModule.getAssessment(targetIp) || {
+    level: 'None',
+    score: 0,
+    labels: [],
+    reasons: [],
+    tool_hints: [],
+    summary: 'No attack behavior detected'
+  };
 
   const combinedProfile = {
     ...profile,
-    labels: labelsData.labels,
-    reasons: labelsData.reasons,
-    tool_hints: labelsData.tool_hints
+    level: assessment.level,
+    score: assessment.score,
+    labels: assessment.labels,
+    reasons: assessment.reasons,
+    tool_hints: assessment.tool_hints,
+    summary: assessment.summary
   };
 
   console.log(JSON.stringify(combinedProfile, null, 2));
