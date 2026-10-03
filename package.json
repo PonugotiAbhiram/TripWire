@@ -1,0 +1,23 @@
+{
+  "name": "tripwire",
+  "version": "1.0.0",
+  "description": "TripWire - A modular honeypot for Computer Networks project",
+  "main": "sensor/index.js",
+  "scripts": {
+    "start": "node sensor/index.js"
+  },
+  "keywords": [
+    "honeypot",
+    "security",
+    "express",
+    "sqlite"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.8.0"
+  }
+}
