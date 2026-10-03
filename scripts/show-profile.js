@@ -10,6 +10,7 @@
 
 const net = require('net');
 const analyzer = require('../sensor/analyzer');
+const labelsModule = require('../sensor/labels');
 
 function main() {
   const targetIp = process.argv[2];
@@ -34,7 +35,17 @@ function main() {
     process.exit(1);
   }
 
-  console.log(JSON.stringify(profile, null, 2));
+  // Retrieve labels, reasons, and tool hints
+  const labelsData = labelsModule.getLabels(targetIp) || { labels: [], reasons: [], tool_hints: [] };
+
+  const combinedProfile = {
+    ...profile,
+    labels: labelsData.labels,
+    reasons: labelsData.reasons,
+    tool_hints: labelsData.tool_hints
+  };
+
+  console.log(JSON.stringify(combinedProfile, null, 2));
   process.exit(0);
 }
 
