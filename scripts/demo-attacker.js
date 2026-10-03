@@ -164,8 +164,6 @@ async function runPhase1(target, delay) {
 
       socket.connect(port, target);
     });
-
-    if (delay > 0) await sleep(delay);
   }
 
   const durationSec = ((Date.now() - startTime) / 1000).toFixed(2);
