@@ -19,7 +19,7 @@ const http = require('http');
 // HARD LIMIT CONSTANTS & CONFIGURATION
 // ============================================================================
 const MAX_PORTS = 20;
-const MAX_PASSWORD_GUESSES = 10;
+const MAX_PASSWORD_GUESSES = 12; // Hard cap at max 12 password attempts (HTTP + Telnet)
 const MAX_WEB_PATHS = 5;
 const DEFAULT_TARGET = '127.0.0.1';
 const DEFAULT_DELAY = 200;
@@ -251,7 +251,92 @@ async function runPhase2(target, delay) {
     if (delay > 0) await sleep(delay);
   }
 
-  console.log(`\n  [Phase 2 Complete] Sent ${sentCount} password guess attempts to http://${target}:${DEFAULT_PORT}/login`);
+  console.log(`\n  [HTTP POST Complete] Sent ${sentCount} HTTP login attempts to http://${target}:${DEFAULT_PORT}/login`);
+
+  // --- Telnet Password Guessing (Port 2323) ---
+  console.log('  --- Telnet Password Guessing (Port 2323) ---');
+  const telnetAttempts = [
+    { username: 'admin', password: 'admin' },
+    { username: 'root', password: '123456' },
+    { username: 'admin', password: 'password' }
+  ];
+
+  await new Promise((resolve) => {
+    const socket = new net.Socket();
+    socket.setTimeout(5000);
+
+    let receiveBuffer = '';
+
+    socket.on('data', (chunk) => {
+      receiveBuffer += chunk.toString('utf-8');
+    });
+
+    function waitForPattern(regex, timeoutMs = 2000) {
+      return new Promise((res) => {
+        // 1. Check if pattern is already in receiveBuffer before waiting
+        const initialMatch = receiveBuffer.match(regex);
+        if (initialMatch) {
+          const idx = receiveBuffer.search(regex);
+          receiveBuffer = receiveBuffer.slice(idx + initialMatch[0].length);
+          return res(true);
+        }
+
+        let timer;
+        function checkBuffer() {
+          const m = receiveBuffer.match(regex);
+          if (m) {
+            if (timer) clearTimeout(timer);
+            socket.removeListener('data', checkBuffer);
+            const idx = receiveBuffer.search(regex);
+            receiveBuffer = receiveBuffer.slice(idx + m[0].length);
+            res(true);
+          }
+        }
+
+        timer = setTimeout(() => {
+          socket.removeListener('data', checkBuffer);
+          res(false);
+        }, timeoutMs);
+
+        socket.on('data', checkBuffer);
+      });
+    }
+
+    const cleanup = () => {
+      socket.destroy();
+      resolve();
+    };
+
+    socket.on('error', cleanup);
+    socket.on('timeout', cleanup);
+
+    socket.connect(2323, target, async () => {
+      try {
+        for (const attempt of telnetAttempts) {
+          // Wait for login prompt
+          await waitForPattern(/login:/i);
+          socket.write(attempt.username + '\r\n');
+
+          // Wait for password prompt
+          await waitForPattern(/Password:/i);
+          socket.write(attempt.password + '\r\n');
+
+          // Wait for failure response
+          await waitForPattern(/Login incorrect/i);
+          console.log(`  [Telnet 2323] Credentials: ${attempt.username}:${attempt.password} -> Response: Login incorrect`);
+          sentCount++;
+
+          if (delay > 0) await sleep(delay);
+        }
+      } catch (err) {
+        console.log(`  [Telnet 2323] Error: ${err.message}`);
+      } finally {
+        cleanup();
+      }
+    });
+  });
+
+  console.log(`\n  [Phase 2 Complete] Sent ${sentCount} total password guess attempts across HTTP & Telnet`);
 
   return { guessesSent: sentCount };
 }
