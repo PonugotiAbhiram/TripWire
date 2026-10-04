@@ -47,6 +47,42 @@ h1, h2, h3 {
   z-index: 1000;
 }
 
+#action-bar {
+  padding: 10px;
+  text-align: center;
+  font-weight: bold;
+  position: sticky;
+  top: 40px;
+  z-index: 999;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+}
+
+.msg-success {
+  background-color: #4caf50;
+  color: #fff;
+}
+
+.msg-error {
+  background-color: var(--color-error);
+  color: #fff;
+}
+
+#close-action-btn {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#close-action-btn:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
 .hidden {
   display: none !important;
 }

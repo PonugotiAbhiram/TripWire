@@ -6,6 +6,10 @@ let pollTimer = null;
 
 // DOM Elements
 const errorBar = document.getElementById('error-bar');
+const actionBar = document.getElementById('action-bar');
+const actionMessage = document.getElementById('action-message');
+const closeActionBtn = document.getElementById('close-action-btn');
+
 const statsTotal = document.getElementById('stats-total');
 const statsIps = document.getElementById('stats-ips');
 const statsHigh = document.getElementById('stats-high');
@@ -389,12 +393,18 @@ if (confirmBanBtn) confirmBanBtn.addEventListener('click', async () => {
     });
     if (!res.ok) {
       const errData = await res.json().catch(()=>({}));
-      showError(errData.error || 'Failed to ban');
+      showActionMessage(errData.error || 'Failed to ban', false);
+      return;
+    } else {
+      showActionMessage(`Banned ${banIpToSubmit} for ${banHours.value} hour(s)`, true);
     }
   } catch (err) {
-    showError(err.message);
+    showActionMessage(err.message, false);
+    return;
   }
   closeBanModal();
+  isFetching = false;
+  clearTimeout(pollTimer);
   pollCycle();
 });
 
@@ -406,12 +416,15 @@ async function unbanIp(ip) {
     });
     if (!res.ok) {
       const errData = await res.json().catch(()=>({}));
-      showError(errData.error || 'Failed to unban');
+      showActionMessage(errData.error || 'Failed to unban', false);
     } else {
+      showActionMessage(`Unbanned ${ip}`, true);
+      isFetching = false;
+      clearTimeout(pollTimer);
       pollCycle();
     }
   } catch (err) {
-    showError(err.message);
+    showActionMessage(err.message, false);
   }
 }
 
@@ -419,6 +432,29 @@ function showError(msg) {
   errorBar.textContent = msg;
   errorBar.classList.remove('hidden');
   setTimeout(() => errorBar.classList.add('hidden'), 5000);
+}
+
+let actionTimer = null;
+function showActionMessage(msg, isSuccess) {
+  if (actionTimer) {
+    clearTimeout(actionTimer);
+  }
+  
+  actionBar.className = isSuccess ? 'msg-success' : 'msg-error';
+  actionMessage.textContent = msg;
+  actionBar.classList.remove('hidden');
+  
+  actionTimer = setTimeout(() => {
+    actionBar.classList.add('hidden');
+    actionTimer = null;
+  }, 10000);
+}
+
+if (closeActionBtn) {
+  closeActionBtn.addEventListener('click', () => {
+    actionBar.classList.add('hidden');
+    clearTimeout(actionTimer);
+  });
 }
 
 if (showBansBtn) {
