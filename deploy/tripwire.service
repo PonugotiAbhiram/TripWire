@@ -1,0 +1,23 @@
+[Unit]
+Description=TripWire Honeypot Sensor
+After=network.target
+
+[Service]
+Type=simple
+User=tripwire
+# Confirm the node path with `which node` and update ExecStart if necessary.
+# Also ensure that the `tripwire` user owns the /opt/tripwire directory.
+WorkingDirectory=/opt/tripwire
+EnvironmentFile=/opt/tripwire/.env
+ExecStart=/usr/bin/node sensor/index.js
+Restart=on-failure
+RestartSec=5
+
+# Security hardening directives
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
