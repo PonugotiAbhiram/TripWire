@@ -283,6 +283,8 @@ app.get('/api/stats', (req, res) => {
       if (a.level in levels) levels[a.level]++;
     }
 
+const reporter = require('./reporter');
+
     const twentyFourHoursAgoIso = new Date(now - 24 * 60 * 60 * 1000).toISOString();
     const stats = {
       total_events: analyzer.getTotalEvents(),
@@ -293,6 +295,9 @@ app.get('/api/stats', (req, res) => {
       events_per_hour: analyzer.getEventsPerHour(twentyFourHoursAgoIso),
       levels
     };
+
+    const metrics = reporter.getMetrics();
+    Object.assign(stats, metrics);
 
     cachedStatsData = stats;
     statsCacheTime = now;

@@ -54,9 +54,26 @@ You will see console startup logs confirming:
 
 ---
 
-## 🧪 Running the Automated Test Suite (`test-doors.js`)
+## 🧪 Running the Automated Test Suite
 
-With `npm start` running in one terminal, run the door test suite in a second terminal:
+**⚠️ Database Warning**: Integration test scripts that generate live HTTP/TCP traffic (`test-doors.js`, `test-api.js`, `test-auth.js`, `test-dashboard.js`, `test-rate-limit-http.js`, and `test-ban-flow.js`) **write events to the database the server is currently pointing at**. If run against the default server, they will insert test data into your live `tripwire.db`.
+
+To run integration tests safely without polluting your real database:
+1. Start the honeypot sensor on a temporary database by setting the `TEST_DB_PATH` environment variable:
+   ```cmd
+   :: Windows CMD
+   set TEST_DB_PATH=C:\TripWire(CN)\it-test.db
+   npm start
+   ```
+   ```powershell
+   # Windows PowerShell
+   $env:TEST_DB_PATH="C:\TripWire(CN)\it-test.db"
+   npm start
+   ```
+   *(Note: If you use a relative path, it will be resolved relative to the directory where you ran `npm start`.)*
+   
+   **CRITICAL**: NEVER set `TEST_DB_PATH` on a real deployment! It is strictly for testing.
+2. Run your test scripts in a separate terminal:
 
 ```bash
 # Run all door verification tests (including ~30s idle timeout test f)
@@ -64,7 +81,17 @@ node scripts/test-doors.js
 
 # Fast mode (skips test f idle timeout test)
 node scripts/test-doors.js --skip-slow
+
+# Run HTTP rate limit testing (Requires explicit confirmation as it locks out the admin IP for 15 minutes)
+# PowerShell: $env:CONFIRM_LOCKOUT_TEST="1"; node scripts/test-rate-limit-http.js
+# CMD: 
+# set CONFIRM_LOCKOUT_TEST=1
+# node scripts\test-rate-limit-http.js
 ```
+
+*Note: Pure function unit tests (`test-bans.js`, `test-event-limiter.js`, `test-labels.js`, `test-severity.js`, `test-storage-cap.js`) isolate themselves entirely and do not touch the real database.*
+
+
 
 ### Test Suite Checks Covered:
 - **Test a (Cap test)**: Sends 25 simultaneous connections to port 2323; verifies at most 20 stay open.
@@ -200,6 +227,19 @@ Returns system-wide metrics including total event count, unique IP count, top pa
 ```bash
 curl http://127.0.0.1:3000/api/stats
 ```
+
+---
+
+## 🛠️ Environment Variables & Rate Limiting
+
+TripWire enforces strict event limits to prevent disk and memory exhaustion. The following environment variables can be set:
+- **`EVENT_RATE_PER_IP`**: Max events per second per IP (default: `50`).
+- **`EVENT_RATE_GLOBAL`**: Max global events per second (default: `300`).
+- **`MAX_EVENT_ROWS`**: Maximum rows retained in the database (default: `500000`).
+- **`CLEANUP_BATCH`**: Number of oldest rows to delete per cleanup batch (default: `5000`).
+- **`MIN_FREE_DISK_MB`**: Minimum free disk space in MB to continue saving events (default: `500`).
+
+When an attacker exceeds their rate limit, TripWire stops inserting individual events. Instead, it counts the dropped events and writes at most ONE summary row per IP every 60 seconds with the method **`RATE_LIMITED`** and the total dropped count in the path field.
 
 ---
 

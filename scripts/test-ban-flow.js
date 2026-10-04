@@ -184,13 +184,13 @@ async function run() {
       await request('POST', '/api/bans/127.0.0.1/unban');
     } catch (e) {}
 
-    // Show that SELECT COUNT(*) FROM bans WHERE active = 1 is 0
+    // Show that GET /api/bans returns an empty list
     try {
-      const db = require('../sensor/db');
-      const count = db.prepare('SELECT COUNT(*) as c FROM bans WHERE active = 1').get().c;
-      console.log(`[DB CHECK] SELECT COUNT(*) FROM bans WHERE active = 1 gives ${count}`);
+      const res = await request('GET', '/api/bans');
+      const activeBans = JSON.parse(res.data);
+      console.log(`[HTTP CHECK] GET /api/bans returned ${activeBans.length} active bans`);
     } catch (e) {
-      console.log(`[DB CHECK] Error checking db: ${e.message}`);
+      console.log(`[HTTP CHECK] Error fetching bans: ${e.message}`);
     }
   }
 }

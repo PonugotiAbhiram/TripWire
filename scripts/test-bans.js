@@ -2,13 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const bans = require('../sensor/bans');
 
-let Database;
-try {
-  Database = require('better-sqlite3');
-} catch {
-  const { DatabaseSync } = require('node:sqlite');
-  Database = DatabaseSync;
-}
+const { DatabaseSync: Database } = require('node:sqlite');
 
 const tempDbPath = path.join(__dirname, '..', 'temp_test_bans.db');
 let db;
