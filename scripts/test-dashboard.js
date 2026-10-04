@@ -4,9 +4,18 @@ const path = require('path');
 
 const API_BASE = 'http://127.0.0.1:3000';
 
-function fetchUrl(url, method = 'GET') {
+let sessionCookie = '';
+
+function fetchUrl(url, method = 'GET', body = null) {
   return new Promise((resolve, reject) => {
-    const req = http.request(url, { method }, (res) => {
+    const opts = { method, headers: {} };
+    if (sessionCookie) {
+      opts.headers['Cookie'] = sessionCookie;
+    }
+    if (body) {
+      opts.headers['Content-Type'] = 'application/json';
+    }
+    const req = http.request(url, opts, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -14,11 +23,32 @@ function fetchUrl(url, method = 'GET') {
       });
     });
     req.on('error', reject);
+    if (body) {
+      req.write(body);
+    }
     req.end();
   });
 }
 
+async function login() {
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12) {
+    console.error('[!] ADMIN_PASSWORD is not set or is shorter than 12 characters.');
+    process.exit(1);
+  }
+  const res = await fetchUrl(API_BASE + '/api/login', 'POST', JSON.stringify({ password: adminPassword }));
+  if (res.status !== 200) {
+    console.error('[!] Login failed in test. Status:', res.status);
+    process.exit(1);
+  }
+  const cookies = res.headers['set-cookie'];
+  if (cookies && cookies.length > 0) {
+    sessionCookie = cookies[0].split(';')[0];
+  }
+}
+
 async function runTests() {
+  await login();
   console.log('=== STARTING DASHBOARD TESTS ===\n');
   let hasFailed = false;
 

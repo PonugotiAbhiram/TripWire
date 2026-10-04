@@ -12,16 +12,98 @@
 const express = require('express');
 const net = require('net');
 const path = require('path');
+const crypto = require('crypto');
 const db = require('./db');
 const analyzer = require('./analyzer');
 const severity = require('./severity');
+const createRateLimiter = require('./rateLimit');
 
 const app = express();
 
-// Disable X-Powered-By header
 app.disable('x-powered-by');
+app.use(express.json());
 
-// Apply security headers to non-api routes (dashboard)
+// 1. Password hashing setup
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+let startupHash = null;
+const passwordSalt = crypto.randomBytes(16);
+if (ADMIN_PASSWORD && ADMIN_PASSWORD.length >= 12) {
+  startupHash = crypto.scryptSync(ADMIN_PASSWORD, passwordSalt, 64);
+}
+
+// 2. Host Header Check
+app.use((req, res, next) => {
+  const host = req.headers.host || '';
+  const allowedHosts = ['127.0.0.1:3000', 'localhost:3000'];
+  if (process.env.ADMIN_ALLOWED_HOSTS) {
+    allowedHosts.push(...process.env.ADMIN_ALLOWED_HOSTS.split(',').map(s => s.trim()));
+  }
+  if (!allowedHosts.includes(host)) {
+    return res.status(400).json({ error: 'invalid host' });
+  }
+  next();
+});
+
+// 3. Origin Check for POST
+app.use((req, res, next) => {
+  if (req.method === 'POST') {
+    const origin = req.headers.origin;
+    if (origin) {
+      let originHost = '';
+      try { originHost = new URL(origin).host; } catch (e) {}
+      if (originHost !== req.headers.host) {
+        return res.status(403).json({ error: 'invalid origin' });
+      }
+    }
+  }
+  next();
+});
+
+// 4. Session Parsing
+const sessions = new Map();
+const SESSION_IDLE_TIMEOUT = 30 * 60 * 1000;
+const SESSION_MAX_LIFETIME = 8 * 60 * 60 * 1000;
+const limiter = createRateLimiter();
+
+function parseCookies(cookieStr) {
+  const cookies = {};
+  if (!cookieStr) return cookies;
+  cookieStr.split(';').forEach(c => {
+    const parts = c.split('=');
+    if (parts.length >= 2) {
+      cookies[parts.shift().trim()] = decodeURI(parts.join('='));
+    }
+  });
+  return cookies;
+}
+
+app.use((req, res, next) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const token = cookies.tw_session;
+  req.session = null;
+  req.sessionToken = token;
+  
+  if (token && sessions.has(token)) {
+    const sess = sessions.get(token);
+    const now = Date.now();
+    if (now - sess.lastSeen > SESSION_IDLE_TIMEOUT || now - sess.createdAt > SESSION_MAX_LIFETIME) {
+      sessions.delete(token);
+    } else {
+      sess.lastSeen = now;
+      req.session = sess;
+    }
+  }
+  next();
+});
+
+// 5. Apply headers
+app.use('/api', (req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api')) {
     res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'");
@@ -31,18 +113,75 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static dashboard files
-app.use(express.static(path.join(__dirname, 'public')));
+// 6. Login/Logout/Session endpoints
+app.post('/api/login', (req, res) => {
+  const ip = req.ip || req.connection.remoteAddress;
+  if (limiter.isBlocked(ip)) {
+    return res.status(429).set('Retry-After', '900').json({ error: 'too many attempts' });
+  }
 
-// Apply security and JSON headers ONLY on /api routes
+  const { password } = req.body;
+  if (!password || typeof password !== 'string') {
+    limiter.addFail(ip);
+    console.log(`[!] Failed admin login from ${ip}`);
+    return res.status(401).json({ error: 'invalid password' });
+  }
+
+  const attemptHash = crypto.scryptSync(password, passwordSalt, 64);
+  if (!startupHash || !crypto.timingSafeEqual(attemptHash, startupHash)) {
+    limiter.addFail(ip);
+    console.log(`[!] Failed admin login from ${ip}`);
+    return res.status(401).json({ error: 'invalid password' });
+  }
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const csrf = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { createdAt: Date.now(), lastSeen: Date.now(), csrf });
+  
+  let cookieHeader = `tw_session=${token}; HttpOnly; SameSite=Strict; Path=/`;
+  if (process.env.COOKIE_SECURE === '1') cookieHeader += '; Secure';
+  res.setHeader('Set-Cookie', cookieHeader);
+  res.json({ ok: true, csrf });
+});
+
+app.post('/api/logout', (req, res) => {
+  if (!req.session) return res.status(401).json({ error: 'login required' });
+  const csrfHeader = req.headers['x-csrf-token'];
+  if (csrfHeader !== req.session.csrf) {
+    return res.status(403).json({ error: 'invalid csrf' });
+  }
+  sessions.delete(req.sessionToken);
+  res.setHeader('Set-Cookie', 'tw_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  res.json({ ok: true });
+});
+
+app.get('/api/session', (req, res) => {
+  if (req.session) {
+    res.json({ loggedIn: true, csrf: req.session.csrf });
+  } else {
+    res.status(401).json({ error: 'not logged in' });
+  }
+});
+
+// 7. Auth Enforcement
 app.use('/api', (req, res, next) => {
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Cache-Control', 'no-store');
+  if (!req.session) return res.status(401).json({ error: 'login required' });
   next();
 });
 
-// Prepared SQL statement for GET /api/events (100 most recent events)
+app.use((req, res, next) => {
+  if (!req.path.startsWith('/api')) {
+    const publicFiles = ['/login.html', '/login.js', '/style.css'];
+    if (!publicFiles.includes(req.path) && !req.session) {
+      return res.redirect(302, '/login.html');
+    }
+  }
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Prepared SQL statement for GET /api/events
 const getLatestEventsStmt = db.prepare(`
   SELECT 
     id, timestamp, source_ip, protocol, port, method, path,
@@ -52,24 +191,14 @@ const getLatestEventsStmt = db.prepare(`
   LIMIT 100
 `);
 
-// In-memory cache variables (5 second TTL)
 let cachedAttackersData = null;
 let attackersCacheTime = 0;
-
 let cachedStatsData = null;
 let statsCacheTime = 0;
 
-/**
- * Shared cached function to compute threat assessments for the 100 most recent IPs.
- * Feeds both /api/attackers and /api/stats (prevents duplicate getAssessment calls).
- * 
- * @returns {Array<object>} Sorted array of attacker profiles
- */
 function getAttackersCached() {
   const now = Date.now();
-  if (cachedAttackersData && (now - attackersCacheTime < 5000)) {
-    return cachedAttackersData;
-  }
+  if (cachedAttackersData && (now - attackersCacheTime < 5000)) return cachedAttackersData;
 
   const recentIps = analyzer.listIps(100);
   const attackers = recentIps.map(ipObj => {
@@ -87,11 +216,8 @@ function getAttackersCached() {
     };
   });
 
-  // Sort by score DESC, then last_seen DESC
   attackers.sort((a, b) => {
-    if (b.score !== a.score) {
-      return b.score - a.score;
-    }
+    if (b.score !== a.score) return b.score - a.score;
     return (b.last_seen || '').localeCompare(a.last_seen || '');
   });
 
@@ -100,29 +226,16 @@ function getAttackersCached() {
   return cachedAttackersData;
 }
 
-/**
- * GET /api/events
- * Returns array of the 100 latest logged events.
- */
 app.get('/api/events', (req, res) => {
   try {
     const rows = getLatestEventsStmt.all();
-
     const events = rows.map(row => {
       let parsedHeaders = row.raw_headers;
       if (typeof row.raw_headers === 'string') {
-        try {
-          parsedHeaders = JSON.parse(row.raw_headers);
-        } catch {
-          parsedHeaders = row.raw_headers;
-        }
+        try { parsedHeaders = JSON.parse(row.raw_headers); } catch {}
       }
-      return {
-        ...row,
-        raw_headers: parsedHeaders
-      };
+      return { ...row, raw_headers: parsedHeaders };
     });
-
     res.json(events);
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);
@@ -130,73 +243,44 @@ app.get('/api/events', (req, res) => {
   }
 });
 
-/**
- * GET /api/attackers
- * Returns 100 most recent attackers with threat assessments, sorted by score DESC.
- */
 app.get('/api/attackers', (req, res) => {
   try {
-    const attackers = getAttackersCached();
-    res.json(attackers);
+    res.json(getAttackersCached());
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);
     res.status(500).json({ error: 'internal error' });
   }
 });
 
-/**
- * GET /api/attackers/:ip
- * Returns detailed profile, assessment, and timeline for a specific IP.
- */
 app.get('/api/attackers/:ip', (req, res) => {
   try {
     const ip = req.params.ip;
-
-    if (net.isIP(ip) === 0) {
-      return res.status(400).json({ error: 'invalid ip' });
-    }
+    if (net.isIP(ip) === 0) return res.status(400).json({ error: 'invalid ip' });
 
     const profile = analyzer.getProfile(ip);
-    if (!profile) {
-      return res.status(404).json({ error: 'unknown ip' });
-    }
+    if (!profile) return res.status(404).json({ error: 'unknown ip' });
 
     const assessment = severity.getAssessment(ip);
     const timeline = analyzer.getTimeline(ip, 200);
-
-    res.json({
-      profile,
-      assessment,
-      timeline
-    });
+    res.json({ profile, assessment, timeline });
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);
     res.status(500).json({ error: 'internal error' });
   }
 });
 
-/**
- * GET /api/stats
- * Returns global honeypot stats including total events, unique IPs, top passwords/usernames,
- * events per protocol, events per hour (last 24h), and threat level distribution.
- */
 app.get('/api/stats', (req, res) => {
   try {
     const now = Date.now();
-    if (cachedStatsData && (now - statsCacheTime < 5000)) {
-      return res.json(cachedStatsData);
-    }
+    if (cachedStatsData && (now - statsCacheTime < 5000)) return res.json(cachedStatsData);
 
     const attackers = getAttackersCached();
     const levels = { High: 0, Medium: 0, Low: 0, None: 0 };
     for (const a of attackers) {
-      if (a.level in levels) {
-        levels[a.level]++;
-      }
+      if (a.level in levels) levels[a.level]++;
     }
 
     const twentyFourHoursAgoIso = new Date(now - 24 * 60 * 60 * 1000).toISOString();
-
     const stats = {
       total_events: analyzer.getTotalEvents(),
       unique_ips: analyzer.getUniqueIps(),
@@ -209,7 +293,6 @@ app.get('/api/stats', (req, res) => {
 
     cachedStatsData = stats;
     statsCacheTime = now;
-
     res.json(stats);
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);

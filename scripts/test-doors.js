@@ -23,27 +23,73 @@ function logResult(label, isPass, detail = '') {
   }
 }
 
-// Helper for HTTP GET to Admin API
-function fetchAdminEvents() {
+let sessionCookie = '';
+
+function fetchJson(path, options = {}) {
   return new Promise((resolve, reject) => {
-    http.get(`http://${TARGET}:3000/api/events`, (res) => {
-      let data = '';
-      res.on('data', c => data += c);
+    const opts = {
+      hostname: '127.0.0.1',
+      port: 3000,
+      path: path,
+      method: options.method || 'GET',
+      headers: { ...(options.headers || {}) }
+    };
+    if (sessionCookie) {
+      opts.headers['Cookie'] = sessionCookie;
+    }
+    const req = http.request(opts, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
       res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(e);
-        }
+        let json = null;
+        try { json = JSON.parse(body); } catch {}
+        resolve({
+          statusCode: res.statusCode,
+          headers: res.headers,
+          data: json
+        });
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    if (options.body) {
+      req.write(options.body);
+    }
+    req.end();
   });
+}
+
+async function login() {
+  const adminPassword = process.env.ADMIN_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12) {
+    console.error('[!] ADMIN_PASSWORD is not set or is shorter than 12 characters.');
+    process.exit(1);
+  }
+  const res = await fetchJson('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: adminPassword })
+  });
+  if (res.statusCode !== 200) {
+    console.error('[!] Login failed in test. Status:', res.statusCode);
+    process.exit(1);
+  }
+  const cookies = res.headers['set-cookie'];
+  if (cookies && cookies.length > 0) {
+    sessionCookie = cookies[0].split(';')[0];
+  }
+}
+
+// Helper for HTTP GET to Admin API
+async function fetchAdminEvents() {
+  const res = await fetchJson('/api/events');
+  return res.data;
 }
 
 // Helper to sleep
 const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 async function runTests() {
+  await login();
   console.log('===========================================================');
   console.log('  TRIPWIRE TEST-DOORS SUITE (Target: 127.0.0.1)');
   console.log('===========================================================');

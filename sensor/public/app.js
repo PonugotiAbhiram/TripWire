@@ -47,8 +47,32 @@ function formatDate(isoString) {
   }
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
+let csrfToken = '';
+
+async function checkSession() {
+  try {
+    const res = await fetch('/api/session');
+    if (!res.ok) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const data = await res.json();
+    csrfToken = data.csrf;
+  } catch (err) {
+    window.location.href = '/login.html';
+  }
+}
+
+async function fetchJson(url, options = {}) {
+  if (options.method === 'POST') {
+    options.headers = options.headers || {};
+    options.headers['X-CSRF-Token'] = csrfToken;
+  }
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    window.location.href = '/login.html';
+    throw new Error('Unauthorized');
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -289,5 +313,19 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
+const logoutBtn = document.getElementById('logout-btn');
+if (logoutBtn) {
+  logoutBtn.addEventListener('click', async () => {
+    try {
+      await fetchJson('/api/logout', { method: 'POST' });
+    } catch(err) {}
+    window.location.href = '/login.html';
+  });
+}
+
 // Initial kick-off
-pollCycle();
+checkSession().then(() => {
+  if (csrfToken) {
+    pollCycle();
+  }
+});

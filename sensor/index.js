@@ -41,17 +41,24 @@ webServer.on('error', (err) => {
 });
 
 // 2. Start the private Admin API on Port 3000 (Bound strictly to 127.0.0.1)
-const adminServer = adminApiApp.listen(ADMIN_PORT, ADMIN_HOST, () => {
-  console.log(`[+] Admin API      : http://${ADMIN_HOST}:${ADMIN_PORT}/api/events`);
-});
+const adminPassword = process.env.ADMIN_PASSWORD;
+if (!adminPassword || adminPassword.length < 12) {
+  console.log(`[!] ADMIN_PASSWORD is not set or is shorter than 12 characters.`);
+  console.log(`[!] Admin dashboard and API will NOT start.`);
+  console.log(`[!] To enable the admin server, set ADMIN_PASSWORD to a secure phrase.`);
+} else {
+  const adminServer = adminApiApp.listen(ADMIN_PORT, ADMIN_HOST, () => {
+    console.log(`[+] Admin API      : http://${ADMIN_HOST}:${ADMIN_PORT}/api/events`);
+  });
 
-adminServer.on('error', (err) => {
-  console.error('[ADMIN API SERVER ERROR]', err.message);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`[ADMIN API SERVER ERROR] Port ${ADMIN_PORT} is already in use. Exiting.`);
-    process.exit(1);
-  }
-});
+  adminServer.on('error', (err) => {
+    console.error('[ADMIN API SERVER ERROR]', err.message);
+    if (err.code === 'EADDRINUSE') {
+      console.error(`[ADMIN API SERVER ERROR] Port ${ADMIN_PORT} is already in use. Exiting.`);
+      process.exit(1);
+    }
+  });
+}
 
 // 3. Start Fake TCP Doors (Telnet 2323, FTP 2121, SSH 2222)
 fakeTelnet.listen(2323, BIND_HOST);
