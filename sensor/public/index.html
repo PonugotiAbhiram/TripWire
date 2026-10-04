@@ -10,7 +10,10 @@
   
   <header class="dashboard-header">
     <h1>TripWire Sensor Dashboard</h1>
-    <button id="logout-btn">Logout</button>
+    <div class="header-actions">
+      <button id="show-bans-btn">Manage Bans</button>
+      <button id="logout-btn">Logout</button>
+    </div>
   </header>
 
   <main>
@@ -50,6 +53,7 @@
                 <th>Events</th>
                 <th>Last Seen</th>
                 <th>Summary</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody id="attackers-tbody">
@@ -134,7 +138,48 @@
         </table>
       </div>
     </section>
+
+    <!-- Bans Panel (Hidden by default) -->
+    <section id="bans-panel" class="hidden">
+      <div class="panel-header">
+        <h2>Active Bans</h2>
+        <button id="close-bans-btn">Close</button>
+      </div>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>Reason</th>
+              <th>Created</th>
+              <th>Expires</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="bans-tbody">
+            <tr class="empty-state"><td colspan="5">No active bans.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   </main>
+
+  <!-- Ban Modal -->
+  <div id="ban-modal" class="modal hidden">
+    <div class="modal-content card">
+      <h3>Ban IP: <span id="ban-target-ip"></span></h3>
+      <div class="modal-form">
+        <label for="ban-reason">Reason:</label>
+        <input type="text" id="ban-reason" placeholder="e.g. Repeated SSH scanning">
+        <label for="ban-hours">Duration (Hours):</label>
+        <input type="number" id="ban-hours" value="24" min="1" max="720">
+        <div class="modal-actions">
+          <button id="confirm-ban-btn" class="btn-danger">Confirm Ban</button>
+          <button id="cancel-ban-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="/app.js"></script>
 </body>

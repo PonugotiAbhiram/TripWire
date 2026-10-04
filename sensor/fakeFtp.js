@@ -9,6 +9,8 @@
 
 const net = require('net');
 const { reportEvent } = require('./reporter');
+const db = require('./db');
+const bans = require('./bans');
 
 const PORT = 2121;
 const HOST = process.env.BIND_HOST || '127.0.0.1';
@@ -21,6 +23,11 @@ const MAX_ATTEMPTS = 3;
 let activeConnections = 0;
 
 const server = net.createServer((socket) => {
+  const clientIp = (socket.remoteAddress || '0.0.0.0').replace(/^::ffff:/, '');
+  if (bans.checkAndBlock(clientIp, socket, 'ftp', 2121, db)) {
+    return;
+  }
+
   // Max concurrent connection enforcement
   if (activeConnections >= MAX_CONCURRENT) {
     socket.destroy();
@@ -29,7 +36,6 @@ const server = net.createServer((socket) => {
 
   activeConnections++;
 
-  const clientIp = (socket.remoteAddress || '0.0.0.0').replace(/^::ffff:/, '');
   let loggedConnect = false;
 
   // Immediately log CONNECT event

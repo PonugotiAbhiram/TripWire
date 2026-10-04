@@ -26,6 +26,19 @@ const detailPasswords = document.getElementById('detail-passwords');
 const detailPaths = document.getElementById('detail-paths');
 const detailTimeline = document.getElementById('detail-timeline');
 
+const showBansBtn = document.getElementById('show-bans-btn');
+const closeBansBtn = document.getElementById('close-bans-btn');
+const bansPanel = document.getElementById('bans-panel');
+const bansTbody = document.getElementById('bans-tbody');
+
+const banModal = document.getElementById('ban-modal');
+const banTargetIp = document.getElementById('ban-target-ip');
+const banReason = document.getElementById('ban-reason');
+const banHours = document.getElementById('ban-hours');
+const confirmBanBtn = document.getElementById('confirm-ban-btn');
+const cancelBanBtn = document.getElementById('cancel-ban-btn');
+let banIpToSubmit = null;
+
 // Valid levels map to safe CSS classes
 const BADGE_CLASSES = {
   High: 'badge-High',
@@ -118,6 +131,14 @@ function renderAttackers(attackers) {
 
     const tdIp = createTableCell(a.ip);
     
+    if (a.banned) {
+      const bBadge = document.createElement('span');
+      bBadge.className = 'badge badge-banned';
+      bBadge.textContent = 'BANNED';
+      bBadge.style.marginLeft = '5px';
+      tdIp.appendChild(bBadge);
+    }
+    
     const tdLevel = document.createElement('td');
     const badge = document.createElement('span');
     badge.className = 'badge ' + getBadgeClass(a.level);
@@ -129,12 +150,30 @@ function renderAttackers(attackers) {
     const tdSeen = createTableCell(formatDate(a.last_seen), a.last_seen);
     const tdSummary = createTableCell(a.summary);
 
+    const tdAction = document.createElement('td');
+    const actionBtn = document.createElement('button');
+    if (a.banned) {
+      actionBtn.textContent = 'Unban';
+      actionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        unbanIp(a.ip);
+      });
+    } else {
+      actionBtn.textContent = 'Ban';
+      actionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openBanModal(a.ip);
+      });
+    }
+    tdAction.appendChild(actionBtn);
+
     tr.appendChild(tdIp);
     tr.appendChild(tdLevel);
     tr.appendChild(tdScore);
     tr.appendChild(tdEvents);
     tr.appendChild(tdSeen);
     tr.appendChild(tdSummary);
+    tr.appendChild(tdAction);
     
     attackersTbody.appendChild(tr);
   });
@@ -284,6 +323,9 @@ async function pollCycle() {
     if (selectedIp) {
       await fetchSelectedAttackerDetails();
     }
+    if (!bansPanel.classList.contains('hidden')) {
+      await loadBans();
+    }
   } catch (err) {
     if (seq === currentSequence) {
       errorBar.classList.remove('hidden');
@@ -320,6 +362,114 @@ if (logoutBtn) {
       await fetchJson('/api/logout', { method: 'POST' });
     } catch(err) {}
     window.location.href = '/login.html';
+  });
+}
+
+function openBanModal(ip) {
+  banIpToSubmit = ip;
+  banTargetIp.textContent = ip;
+  banReason.value = '';
+  banHours.value = '24';
+  banModal.classList.remove('hidden');
+}
+
+function closeBanModal() {
+  banModal.classList.add('hidden');
+  banIpToSubmit = null;
+}
+
+if (cancelBanBtn) cancelBanBtn.addEventListener('click', closeBanModal);
+if (confirmBanBtn) confirmBanBtn.addEventListener('click', async () => {
+  if (!banIpToSubmit) return;
+  try {
+    const res = await fetch('/api/bans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({ ip: banIpToSubmit, reason: banReason.value, hours: parseInt(banHours.value, 10) })
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(()=>({}));
+      showError(errData.error || 'Failed to ban');
+    }
+  } catch (err) {
+    showError(err.message);
+  }
+  closeBanModal();
+  pollCycle();
+});
+
+async function unbanIp(ip) {
+  try {
+    const res = await fetch(`/api/bans/${encodeURIComponent(ip)}/unban`, {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrfToken }
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(()=>({}));
+      showError(errData.error || 'Failed to unban');
+    } else {
+      pollCycle();
+    }
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function showError(msg) {
+  errorBar.textContent = msg;
+  errorBar.classList.remove('hidden');
+  setTimeout(() => errorBar.classList.add('hidden'), 5000);
+}
+
+if (showBansBtn) {
+  showBansBtn.addEventListener('click', () => {
+    bansPanel.classList.remove('hidden');
+    loadBans();
+  });
+}
+
+if (closeBansBtn) {
+  closeBansBtn.addEventListener('click', () => {
+    bansPanel.classList.add('hidden');
+  });
+}
+
+async function loadBans() {
+  try {
+    const bans = await fetchJson('/api/bans');
+    renderBans(bans);
+  } catch (err) {
+    showError('Error loading bans');
+  }
+}
+
+function renderBans(bans) {
+  bansTbody.textContent = '';
+  if (!bans || bans.length === 0) {
+    const tr = document.createElement('tr');
+    tr.className = 'empty-state';
+    const td = document.createElement('td');
+    td.setAttribute('colspan', '5');
+    td.textContent = 'No active bans.';
+    tr.appendChild(td);
+    bansTbody.appendChild(tr);
+    return;
+  }
+  bans.forEach(b => {
+    const tr = document.createElement('tr');
+    tr.appendChild(createTableCell(b.ip));
+    tr.appendChild(createTableCell(b.reason || ''));
+    tr.appendChild(createTableCell(formatDate(b.created_at), b.created_at));
+    tr.appendChild(createTableCell(formatDate(b.expires_at), b.expires_at));
+    
+    const tdAction = document.createElement('td');
+    const btn = document.createElement('button');
+    btn.textContent = 'Unban';
+    btn.addEventListener('click', () => unbanIp(b.ip));
+    tdAction.appendChild(btn);
+    tr.appendChild(tdAction);
+    
+    bansTbody.appendChild(tr);
   });
 }
 

@@ -17,6 +17,7 @@ const db = require('./db');
 const analyzer = require('./analyzer');
 const severity = require('./severity');
 const createRateLimiter = require('./rateLimit');
+const bans = require('./bans');
 
 const app = express();
 
@@ -205,6 +206,7 @@ function getAttackersCached() {
     const assessment = severity.getAssessment(ipObj.source_ip);
     return {
       ip: ipObj.source_ip,
+      banned: bans.isBanned(ipObj.source_ip),
       level: assessment ? assessment.level : 'None',
       score: assessment ? assessment.score : 0,
       summary: assessment ? assessment.summary : 'No attack behavior detected',
@@ -262,7 +264,8 @@ app.get('/api/attackers/:ip', (req, res) => {
 
     const assessment = severity.getAssessment(ip);
     const timeline = analyzer.getTimeline(ip, 200);
-    res.json({ profile, assessment, timeline });
+    const banned = bans.isBanned(ip);
+    res.json({ profile, assessment, timeline, banned });
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);
     res.status(500).json({ error: 'internal error' });
@@ -297,6 +300,49 @@ app.get('/api/stats', (req, res) => {
   } catch (err) {
     console.error('[ADMIN API ERROR]', err.message);
     res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.get('/api/bans', (req, res) => {
+  try {
+    res.json(bans.listBans(db));
+  } catch (err) {
+    res.status(500).json({ error: 'internal error' });
+  }
+});
+
+app.post('/api/bans', (req, res) => {
+  const csrfHeader = req.headers['x-csrf-token'];
+  if (csrfHeader !== req.session.csrf) return res.status(403).json({ error: 'invalid csrf' });
+
+  const { ip, reason, hours } = req.body;
+  if (!ip) return res.status(400).json({ error: 'missing ip' });
+
+  try {
+    const check = bans.canBan(ip);
+    if (!check.ok) {
+      if (check.reason === 'Invalid IP address') return res.status(400).json({ error: 'invalid ip' });
+      return res.status(403).json({ error: 'this address can never be banned' });
+    }
+
+    bans.addBan(db, ip, reason, hours);
+    console.log(`Banned ${bans.normalizeIp(ip)} for ${hours || 24} hours: ${reason || 'No reason'}`);
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+app.post('/api/bans/:ip/unban', (req, res) => {
+  const csrfHeader = req.headers['x-csrf-token'];
+  if (csrfHeader !== req.session.csrf) return res.status(403).json({ error: 'invalid csrf' });
+
+  const ip = req.params.ip;
+  if (bans.removeBan(db, ip)) {
+    console.log(`Unbanned ${bans.normalizeIp(ip)}`);
+    res.json({ ok: true });
+  } else {
+    res.status(404).json({ error: 'ban not found' });
   }
 });
 

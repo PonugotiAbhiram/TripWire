@@ -10,6 +10,8 @@
 
 const express = require('express');
 const { reportEvent } = require('./reporter');
+const db = require('./db');
+const bans = require('./bans');
 
 const app = express();
 
@@ -19,6 +21,15 @@ app.disable('x-powered-by');
 // SECURITY: Limit request body to 10kb to prevent Denial of Service (DoS) attacks
 app.use(express.urlencoded({ extended: false, limit: '10kb' }));
 app.use(express.json({ limit: '10kb' }));
+
+// APP-LEVEL BAN CHECK: Very first middleware
+app.use((req, res, next) => {
+  const clientIp = getClientIp(req);
+  if (bans.checkAndBlock(clientIp, req, 'http', 8080, db)) {
+    return;
+  }
+  next();
+});
 
 /**
  * Helper to extract client IP directly from socket, bypassing X-Forwarded-For to prevent IP spoofing.

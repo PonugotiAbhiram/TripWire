@@ -9,6 +9,8 @@
 
 const net = require('net');
 const { reportEvent } = require('./reporter');
+const db = require('./db');
+const bans = require('./bans');
 
 const PORT = 2323;
 const HOST = process.env.BIND_HOST || '127.0.0.1';
@@ -41,15 +43,18 @@ function stripTelnetIAC(buf) {
 }
 
 const server = net.createServer((socket) => {
+  const clientIp = (socket.remoteAddress || '0.0.0.0').replace(/^::ffff:/, '');
+  if (bans.checkAndBlock(clientIp, socket, 'telnet', 2323, db)) {
+    return;
+  }
+
   // Max concurrent connection enforcement
   if (activeConnections >= MAX_CONCURRENT) {
     socket.destroy();
     return;
   }
-
   activeConnections++;
 
-  const clientIp = (socket.remoteAddress || '0.0.0.0').replace(/^::ffff:/, '');
   let loggedConnect = false;
 
   // Immediately log CONNECT event

@@ -54,4 +54,15 @@ db.exec(createTableQuery);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_events_source_ip ON events (source_ip);`);
 db.exec(`CREATE INDEX IF NOT EXISTS idx_events_timestamp ON events (timestamp);`);
 
+// Create bans table
+db.exec(`
+  CREATE TABLE IF NOT EXISTS bans (
+    ip TEXT PRIMARY KEY,
+    reason TEXT,
+    created_at TEXT,
+    expires_at TEXT,
+    active INTEGER
+  );
+`);
+
 module.exports = db;

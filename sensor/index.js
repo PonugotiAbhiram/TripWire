@@ -16,7 +16,11 @@ const adminApiApp = require('./adminApi');
 const fakeTelnet = require('./fakeTelnet');
 const fakeFtp = require('./fakeFtp');
 const fakeSsh = require('./fakeSsh');
-require('./db'); // Trigger DB connection, WAL mode, table & index creation
+const db = require('./db');
+const bans = require('./bans');
+
+// Load active bans from database into memory
+bans.loadBans(db);
 
 const FAKE_WEB_PORT = 8080;
 const ADMIN_PORT = 3000;
@@ -24,7 +28,7 @@ const ADMIN_HOST = '127.0.0.1';
 const BIND_HOST = process.env.BIND_HOST || '127.0.0.1';
 
 console.log(`====================================================`);
-console.log(`  TRIPWIRE HONEYPOT SENSOR (Step 1-3) STARTED`);
+console.log(`  TRIPWIRE SENSOR STARTED`);
 console.log(`====================================================`);
 
 // 1. Start the Fake Web Doors on Port 8080 (Bound to BIND_HOST)
