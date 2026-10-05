@@ -271,6 +271,31 @@ async function fetchSelectedAttackerDetails() {
     detailSummary.textContent = data.assessment?.summary || 'No data';
     detailTools.textContent = (data.assessment?.tool_hints || []).join(', ') || 'None';
 
+    const attacksContainer = document.getElementById('detail-attacks');
+    const attacksGroup = document.getElementById('detail-attacks-container');
+    attacksContainer.textContent = '';
+    const labels = data.assessment?.labels || [];
+    
+    if (labels.length > 0) {
+      labels.forEach(lbl => {
+        const span = document.createElement('span');
+        span.className = 'badge';
+        span.style.backgroundColor = '#3b82f6';
+        span.style.color = '#fff';
+        
+        let displayTxt = lbl;
+        if (lbl === 'port_scan') displayTxt = 'Port Scan';
+        if (lbl === 'brute_force') displayTxt = 'Brute Force';
+        if (lbl === 'web_probe') displayTxt = 'Web Probe';
+        
+        span.textContent = displayTxt;
+        attacksContainer.appendChild(span);
+      });
+      attacksGroup.classList.remove('hidden');
+    } else {
+      attacksGroup.classList.add('hidden');
+    }
+
     renderList(detailUsernames, data.profile?.top_usernames, x => `${x.username} (${x.count})`);
     renderList(detailPasswords, data.profile?.top_passwords, x => `${x.password} (${x.count})`);
     renderList(detailPaths, data.profile?.paths_probed, x => `${x.path} (${x.count})`);

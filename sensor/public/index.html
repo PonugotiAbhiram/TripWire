@@ -85,6 +85,11 @@
             <span id="detail-tools"></span>
           </div>
 
+          <div class="detail-group hidden" id="detail-attacks-container">
+            <strong>Detected Attacks:</strong>
+            <div id="detail-attacks" style="display: flex; gap: 10px; margin-top: 5px;"></div>
+          </div>
+
           <div class="detail-lists">
             <div>
               <strong>Top Usernames</strong>
@@ -143,30 +148,33 @@
       </div>
     </section>
 
-    <!-- Bans Panel (Hidden by default) -->
-    <section id="bans-panel" class="hidden">
-      <div class="panel-header">
-        <h2>Active Bans</h2>
-        <button id="close-bans-btn">Close</button>
-      </div>
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>IP</th>
-              <th>Reason</th>
-              <th>Created</th>
-              <th>Expires</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody id="bans-tbody">
-            <tr class="empty-state"><td colspan="5">No active bans.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
   </main>
+
+    <!-- Bans Panel Modal (Hidden by default) -->
+    <div id="bans-panel" class="modal hidden">
+      <div class="modal-content card" style="max-width: 800px;">
+        <div class="panel-header">
+          <h2>Active Bans</h2>
+          <button id="close-bans-btn">Close</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>IP</th>
+                <th>Reason</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="bans-tbody">
+              <tr class="empty-state"><td colspan="5">No active bans.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
   <!-- Ban Modal -->
   <div id="ban-modal" class="modal hidden">

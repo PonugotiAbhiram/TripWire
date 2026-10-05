@@ -35,7 +35,7 @@ if (ADMIN_PASSWORD && ADMIN_PASSWORD.length >= 12) {
 // 2. Host Header Check
 app.use((req, res, next) => {
   const host = req.headers.host || '';
-  const allowedHosts = ['127.0.0.1:3000', 'localhost:3000'];
+  const allowedHosts = ['127.0.0.1:3000', 'localhost:3000', '127.0.0.1:8080', 'localhost:8080'];
   if (process.env.ADMIN_ALLOWED_HOSTS) {
     allowedHosts.push(...process.env.ADMIN_ALLOWED_HOSTS.split(',').map(s => s.trim()));
   }
